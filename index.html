@@ -14,36 +14,107 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>
   :root { --pri: #3B6CF6; --bg: #F4F6FA; --text: #1A2230; --sub: #5B6576; }
-  html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+  html, body { margin: 0; height: 100%; background: var(--bg); }
   body { font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; color: var(--text); }
-  iframe { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: var(--bg); }
-  #splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: var(--bg); z-index: 2; transition: opacity .3s; }
-  #splash.hide { opacity: 0; pointer-events: none; }
+  #splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: var(--bg); }
   #splash img { width: 88px; height: 88px; border-radius: 22px; }
   .spin { width: 28px; height: 28px; border-radius: 50%; border: 3px solid #D6E0FD; border-top-color: var(--pri); animation: rot .8s linear infinite; }
   @keyframes rot { to { transform: rotate(360deg); } }
-  #help { display: none; max-width: 300px; text-align: center; font-size: 14px; color: var(--sub); line-height: 1.6; padding: 0 16px; }
-  #help a { display: inline-block; margin-top: 8px; padding: 10px 16px; border-radius: 12px; background: var(--pri); color: #fff; text-decoration: none; font-weight: 700; }
+  #msg { max-width: 300px; text-align: center; font-size: 14px; color: var(--sub); line-height: 1.6; padding: 0 16px; min-height: 22px; }
+  #msg button { margin-top: 10px; padding: 10px 18px; border: 0; border-radius: 12px; background: var(--pri); color: #fff; font-weight: 700; font-size: 15px; }
 </style>
 </head>
 <body>
 <div id="splash">
   <img src="icon-192.png" alt="">
-  <div class="spin"></div>
-  <div id="help">앱이 열리지 않으면 인터넷 연결을 확인하고 다시 열어주세요.<br>
-    <a id="open" target="_blank" rel="noopener">브라우저로 열기</a></div>
+  <div class="spin" id="spin"></div>
+  <div id="msg">불러오는 중…</div>
 </div>
-<iframe id="app" title="클클 매장관리" allow="camera; geolocation; clipboard-write; fullscreen"></iframe>
 <script>
-  // 구글 앱스 스크립트 웹앱 주소 (Code.gs를 '새 배포'로 바꾸면 여기 주소도 바꿔야 함)
-  var APP_URL = 'https://script.google.com/macros/s/AKfycbwDbWa78KSnoGpA1AcHn8_z1TSBulfM1cVnpFU5k1jrnUZ6v4roR_3Rh-EJAas1SB9jLA/exec';
-  var frame = document.getElementById('app'), splash = document.getElementById('splash');
-  document.getElementById('open').href = APP_URL;
-  frame.addEventListener('load', function () { splash.classList.add('hide'); });
-  frame.src = APP_URL;
-  // 20초가 지나도 안 열리면 도움말 표시
-  setTimeout(function () { if (!splash.classList.contains('hide')) document.getElementById('help').style.display = 'block'; }, 20000);
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
+/*
+ * 클클 매장관리 휴대폰 앱.
+ * 구글 웹앱 페이지(script.google.com)를 직접 열지 않고,
+ *  ① 화면 파일(Index.html)을 서버에서 받아 이 페이지에 그리고
+ *  ② 앱이 서버에 묻는 것(google.script.run.api)은 로그인 없이 POST로 보냄.
+ * 그래서 휴대폰의 구글 계정 상태와 상관없이 열림. 화면은 Apps Script에 붙여넣은 최신 Index.html을 그대로 씀.
+ */
+var EXEC = 'https://script.google.com/macros/s/AKfycbwDbWa78KSnoGpA1AcHn8_z1TSBulfM1cVnpFU5k1jrnUZ6v4roR_3Rh-EJAas1SB9jLA/exec';
+var CACHE_KEY = 'klkl_index_html';
+
+function apiPost(action, payload, auth, after) {
+  return fetch(EXEC, {
+    method: 'POST', credentials: 'omit', redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: action, payload: payload, auth: auth, after: after })
+  }).then(function (r) {
+    if (!r.ok) throw new Error('서버 응답 오류 (' + r.status + ')');
+    return r.text();
+  });
+}
+
+// 앱 코드가 쓰는 google.script.run 흉내: withSuccessHandler / withFailureHandler / api(...)
+window.google = { script: {} };
+Object.defineProperty(window.google.script, 'run', { get: function () {
+  var ok = function () {}, fail = function () {};
+  var r = {
+    withSuccessHandler: function (f) { ok = f; return r; },
+    withFailureHandler: function (f) { fail = f; return r; },
+    api: function (action, payload, auth, after) {
+      apiPost(action, payload, auth, after).then(function (s) { ok(s); }).catch(function (e) {
+        fail(new Error(navigator.onLine === false ? '인터넷 연결이 없어요.' : (e && e.message) || '서버 연결에 실패했습니다.'));
+      });
+    }
+  };
+  return r;
+} });
+
+function show(html) {
+  document.open();
+  document.write(html);
+  document.close();
+  // 새로 그린 화면에도 앱 설치 정보(아이콘·색)를 다시 붙임
+  var h = document.head || document.getElementsByTagName('head')[0];
+  if (h) {
+    [['link', { rel: 'manifest', href: 'manifest.webmanifest' }], ['link', { rel: 'apple-touch-icon', href: 'apple-touch-icon.png' }],
+     ['meta', { name: 'theme-color', content: '#3B6CF6' }], ['meta', { name: 'apple-mobile-web-app-capable', content: 'yes' }],
+     ['meta', { name: 'mobile-web-app-capable', content: 'yes' }]].forEach(function (x) {
+      var el = document.createElement(x[0]);
+      Object.keys(x[1]).forEach(function (k) { el.setAttribute(k, x[1][k]); });
+      h.appendChild(el);
+    });
+  }
+}
+function fail(text) {
+  document.getElementById('spin').style.display = 'none';
+  document.getElementById('msg').innerHTML = text + '<br><button onclick="location.reload()">다시 시도</button>';
+}
+function getCache() { try { return localStorage.getItem(CACHE_KEY); } catch (e) { return null; } }
+function setCache(v) { try { localStorage.setItem(CACHE_KEY, v); } catch (e) {} }
+
+function load() {
+  var done = false;
+  var timer = setTimeout(function () {
+    if (done) return;
+    var c = getCache();
+    if (c) { done = true; show(c); } else document.getElementById('msg').textContent = '서버가 느려요. 조금만 기다려 주세요…';
+  }, 12000);
+  fetch(EXEC + '?raw=1&t=' + Date.now(), { credentials: 'omit', redirect: 'follow', cache: 'no-store' })
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+    .then(function (html) {
+      if (!/<html|<body|<script/i.test(html)) throw new Error('화면 파일이 아니에요');
+      setCache(html);
+      if (!done) { done = true; clearTimeout(timer); show(html); }
+    })
+    .catch(function () {
+      if (done) return;
+      clearTimeout(timer);
+      var c = getCache();
+      if (c) { done = true; show(c); }
+      else fail('앱을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.');
+    });
+}
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
+load();
 </script>
 </body>
 </html>

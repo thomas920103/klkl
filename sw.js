@@ -1,5 +1,5 @@
 // 앱 껍데기(화면 틀·아이콘)만 저장해 두고, 실제 내용은 항상 최신으로 불러옴
-const CACHE = 'klkl-shell-v1';
+const CACHE = 'klkl-shell-v2';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
