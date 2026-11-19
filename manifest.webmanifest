@@ -1,0 +1,17 @@
+{
+  "name": "클클 매장관리",
+  "short_name": "클클",
+  "description": "클클(KLKL) 출퇴근·급여·재고·장부 관리",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F4F6FA",
+  "theme_color": "#3B6CF6",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
